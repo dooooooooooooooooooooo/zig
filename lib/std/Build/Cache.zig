@@ -333,7 +333,7 @@ pub const Manifest = struct {
     pub const Diagnostic = union(enum) {
         none,
         manifest_create: fs.File.OpenError,
-        manifest_read: fs.File.ReadError,
+        manifest_read: anyerror,
         manifest_lock: fs.File.LockError,
         file_open: FileOp,
         file_stat: FileOp,
@@ -574,9 +574,9 @@ pub const Manifest = struct {
 
         const input_file_count = self.files.entries.len;
         while (true) : (self.unhit(bin_digest, input_file_count)) {
-            const file_contents = self.manifest_file.?.reader().readAllAlloc(gpa, manifest_file_size_max) catch |err| switch (err) {
+            const file_contents = self.manifest_file.?.readToEndAlloc(gpa, .limited(manifest_file_size_max)) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
-                error.StreamTooLong => return error.OutOfMemory,
+                error.FileTooBig => return error.OutOfMemory,
                 else => |e| {
                     self.diagnostic = .{ .manifest_read = e };
                     return error.CacheCheckFailed;
@@ -995,7 +995,7 @@ pub const Manifest = struct {
 
     fn addDepFileMaybePost(self: *Manifest, dir: fs.Dir, dep_file_basename: []const u8) !void {
         const gpa = self.cache.gpa;
-        const dep_file_contents = try dir.readFileAlloc(gpa, dep_file_basename, manifest_file_size_max);
+        const dep_file_contents = try dir.readFileAlloc(dep_file_basename, gpa, .limited(manifest_file_size_max));
         defer gpa.free(dep_file_contents);
 
         var error_buf: std.ArrayListUnmanaged(u8) = .empty;
