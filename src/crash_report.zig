@@ -80,21 +80,21 @@ fn dumpStatusReport() !void {
     var fba = std.heap.FixedBufferAllocator.init(&crash_heap);
     const allocator = fba.allocator();
 
-    const stderr = std.fs.File.stderr.writer().unbuffered();
+    var stderr_bw = std.fs.File.stderr().writer().unbuffered();
     const block: *Sema.Block = anal.block;
     const zcu = anal.sema.pt.zcu;
 
     const file, const src_base_node = Zcu.LazySrcLoc.resolveBaseNode(block.src_base_inst, zcu) orelse {
         const file = zcu.fileByIndex(block.src_base_inst.resolveFile(&zcu.intern_pool));
-        try stderr.writeAll("Analyzing lost instruction in file '");
-        try writeFilePath(file, stderr);
-        try stderr.writeAll("'. This should not happen!\n\n");
+        try stderr_bw.writeAll("Analyzing lost instruction in file '");
+        try writeFilePath(file, &stderr_bw);
+        try stderr_bw.writeAll("'. This should not happen!\n\n");
         return;
     };
 
-    try stderr.writeAll("Analyzing ");
-    try writeFilePath(file, stderr);
-    try stderr.writeAll("\n");
+    try stderr_bw.writeAll("Analyzing ");
+    try writeFilePath(file, &stderr_bw);
+    try stderr_bw.writeByte('\n');
 
     print_zir.renderInstructionContext(
         allocator,
@@ -103,45 +103,45 @@ fn dumpStatusReport() !void {
         file,
         src_base_node,
         6, // indent
-        stderr,
+        &stderr_bw,
     ) catch |err| switch (err) {
-        error.OutOfMemory => try stderr.writeAll("  <out of memory dumping zir>\n"),
+        error.OutOfMemory => try stderr_bw.writeAll("  <out of memory dumping zir>\n"),
         else => |e| return e,
     };
-    try stderr.writeAll("    For full context, use the command\n      zig ast-check -t ");
-    try writeFilePath(file, stderr);
-    try stderr.writeAll("\n\n");
+    try stderr_bw.writeAll("    For full context, use the command\n      zig ast-check -t ");
+    try writeFilePath(file, &stderr_bw);
+    try stderr_bw.writeAll("\n\n");
 
     var parent = anal.parent;
     while (parent) |curr| {
         fba.reset();
-        try stderr.writeAll("  in ");
+        try stderr_bw.writeAll("  in ");
         const cur_block_file, const cur_block_src_base_node = Zcu.LazySrcLoc.resolveBaseNode(curr.block.src_base_inst, zcu) orelse {
             const cur_block_file = zcu.fileByIndex(curr.block.src_base_inst.resolveFile(&zcu.intern_pool));
-            try writeFilePath(cur_block_file, stderr);
-            try stderr.writeAll("\n    > [lost instruction; this should not happen]\n");
+            try writeFilePath(cur_block_file, &stderr_bw);
+            try stderr_bw.writeAll("\n    > [lost instruction; this should not happen]\n");
             parent = curr.parent;
             continue;
         };
-        try writeFilePath(cur_block_file, stderr);
-        try stderr.writeAll("\n    > ");
+        try writeFilePath(cur_block_file, &stderr_bw);
+        try stderr_bw.writeAll("\n    > ");
         print_zir.renderSingleInstruction(
             allocator,
             curr.body[curr.body_index],
             cur_block_file,
             cur_block_src_base_node,
             6, // indent
-            stderr,
+            &stderr_bw,
         ) catch |err| switch (err) {
-            error.OutOfMemory => try stderr.writeAll("  <out of memory dumping zir>\n"),
+            error.OutOfMemory => try stderr_bw.writeAll("  <out of memory dumping zir>\n"),
             else => |e| return e,
         };
-        try stderr.writeAll("\n");
+        try stderr_bw.writeAll("\n");
 
         parent = curr.parent;
     }
 
-    try stderr.writeAll("\n");
+    try stderr_bw.writeByte('\n');
 }
 
 var crash_heap: [16 * 4096]u8 = undefined;
@@ -283,7 +283,8 @@ const StackContext = union(enum) {
                 debug.dumpCurrentStackTrace(ct.ret_addr);
             },
             .exception => |context| {
-                debug.dumpStackTraceFromBase(context);
+                var stderr = std.fs.File.stderr().writer().unbuffered();
+                debug.dumpStackTraceFromBase(context, &stderr);
             },
             .not_supported => {
                 std.fs.File.stderr().writeAll("Stack trace not supported on this platform.\n") catch {};
@@ -393,7 +394,7 @@ const PanicSwitch = struct {
 
         state.recover_stage = .release_mutex;
 
-        const stderr = std.fs.File.stderr().writer().unbuffered();
+        var stderr = std.fs.File.stderr().writer().unbuffered();
         if (builtin.single_threaded) {
             stderr.print("panic: ", .{}) catch goTo(releaseMutex, .{state});
         } else {
@@ -420,7 +421,7 @@ const PanicSwitch = struct {
         recover(state, trace, stack, msg);
 
         state.recover_stage = .release_mutex;
-        const stderr = std.fs.File.stderr().writer().unbuffered();
+        var stderr = std.fs.File.stderr().writer().unbuffered();
         stderr.writeAll("\nOriginal Error:\n") catch {};
         goTo(reportStack, .{state});
     }
@@ -536,7 +537,7 @@ const PanicSwitch = struct {
                 var stderr = std.fs.File.stderr().writer().unbuffered();
                 stderr.writeAll("\nPanicked while dumping inner panic stack: ") catch {};
                 stderr.writeAll(msg) catch {};
-                stderr.writeAll("\n") catch {};
+                stderr.writeByte('\n') catch {};
 
                 // If we succeed, restore all the way to dumping the stack.
                 state.recover_verbosity = .message_and_stack;
