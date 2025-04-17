@@ -10,7 +10,7 @@ const Zcu = @import("Zcu.zig");
 const LazySrcLoc = Zcu.LazySrcLoc;
 
 /// Write human-readable, debug formatted ZIR code.
-pub fn renderAsText(gpa: Allocator, scope_file: *Zcu.File, bw: *std.io.BufferedWriter) anyerror!void {
+pub fn renderAsText(gpa: Allocator, scope_file: *Zcu.File, bw: *std.io.BufferedWriter) !void {
     var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
 
@@ -176,11 +176,13 @@ const Writer = struct {
         }
     } = .{},
 
+    const Error = std.io.Writer.Error;
+
     fn writeInstToStream(
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const tags = self.code.instructions.items(.tag);
         const tag = tags[@intFromEnum(inst)];
         try stream.print("= {s}(", .{@tagName(tags[@intFromEnum(inst)])});
@@ -632,7 +634,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].un_node;
         try self.writeInstRef(stream, inst_data.operand);
         try stream.writeAll(") ");
@@ -643,7 +645,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].un_tok;
         try self.writeInstRef(stream, inst_data.operand);
         try stream.writeAll(") ");
@@ -654,7 +656,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].pl_node;
         const extra = self.code.extraData(Zir.Inst.ValidateDestructure, inst_data.payload_index).data;
         try self.writeInstRef(stream, extra.operand);
@@ -668,7 +670,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].pl_node;
         const extra = self.code.extraData(Zir.Inst.ArrayInit, inst_data.payload_index).data;
         try self.writeInstRef(stream, extra.ty);
@@ -680,7 +682,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].pl_node;
         const extra = self.code.extraData(Zir.Inst.ArrayTypeSentinel, inst_data.payload_index).data;
         try self.writeInstRef(stream, extra.len);
@@ -696,7 +698,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].ptr_type;
         const str_allowzero = if (inst_data.flags.is_allowzero) "allowzero, " else "";
         const str_const = if (!inst_data.flags.is_mutable) "const, " else "";
@@ -779,7 +781,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].str;
         const str = inst_data.get(self.code);
         try stream.print("\"{f}\")", .{std.zig.fmtEscapes(str)});
@@ -1184,7 +1186,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].inst_node;
         try self.writeInstIndex(stream, inst_data.inst);
         try stream.writeAll(") ");
@@ -2237,7 +2239,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const src_node = self.code.instructions.items(.data)[@intFromEnum(inst)].node;
         try stream.writeAll(") ");
         try self.writeSrcNode(stream, src_node);
@@ -2247,7 +2249,7 @@ const Writer = struct {
         self: *Writer,
         stream: *std.io.BufferedWriter,
         inst: Zir.Inst.Index,
-    ) anyerror!void {
+    ) Error!void {
         const inst_data = self.code.instructions.items(.data)[@intFromEnum(inst)].str_tok;
         const str = inst_data.get(self.code);
         try stream.print("\"{f}\") ", .{std.zig.fmtEscapes(str)});
