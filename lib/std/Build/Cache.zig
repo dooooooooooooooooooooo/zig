@@ -333,7 +333,7 @@ pub const Manifest = struct {
     pub const Diagnostic = union(enum) {
         none,
         manifest_create: fs.File.OpenError,
-        manifest_read: anyerror,
+        manifest_read: fs.File.ReadError,
         manifest_lock: fs.File.LockError,
         file_open: FileOp,
         file_stat: FileOp,
